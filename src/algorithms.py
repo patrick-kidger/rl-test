@@ -2,10 +2,11 @@ import torch
 
 
 class AbstractAlgorithm:
-    def __init__(self, policy, policy_optim, **kwargs):
+    def __init__(self, policy, policy_optim, policy_iters, **kwargs):
         super(AbstractAlgorithm, self).__init__(**kwargs)
         self._policy = policy
         self._policy_optim = policy_optim
+        self._policy_iters = policy_iters
 
     def before_train(self, observations, actions, rewards):
         pass
@@ -22,10 +23,11 @@ class VanillaPolicyGradient(AbstractAlgorithm):
 
     def step(self, observations, actions, rewards):
         weights = self.weights(observations, actions, rewards)
-        performance = -(self._policy(observations[:-1]).log_prob(actions) * weights).sum(dim=0).mean(dim=0)
-        performance.backward()
-        self._policy_optim.step()
-        self._policy_optim.zero_grad()
+        for _ in range(self._policy_iters):
+            performance = -(self._policy(observations[:-1]).log_prob(actions) * weights).sum(dim=0).mean(dim=0)
+            performance.backward()
+            self._policy_optim.step()
+            self._policy_optim.zero_grad()
 
 
 class _ValueMixin(AbstractAlgorithm):
@@ -57,10 +59,9 @@ class AdvantageActorCritic(_ValueMixin, VanillaPolicyGradient):
 
 
 class ProximalPolicyOptimisation(_ValueMixin):
-    def __init__(self, eps, ppo_iters, **kwargs):
+    def __init__(self, eps, **kwargs):
         super(ProximalPolicyOptimisation, self).__init__(**kwargs)
         self._eps = eps
-        self._ppo_iters = ppo_iters
 
     def step(self, observations, actions, rewards):
         value = self._train_value(observations, rewards, self._value_iters)
@@ -71,14 +72,14 @@ class ProximalPolicyOptimisation(_ValueMixin):
         _tmp2 = advantage * torch.where(advantage >= 0,
                                         torch.as_tensor(1 + self._eps, device=advantage.device),
                                         torch.as_tensor(1 - self._eps, device=advantage.device))
-        performance = torch.min(old_density * _tmp1, _tmp2)
+        performance = -torch.min(old_density * _tmp1, _tmp2).sum(dim=0).mean(dim=0)
         performance.backward()
         self._policy_optim.step()
         self._policy_optim.zero_grad()
 
-        for _ in range(self._ppo_iters - 1):
+        for _ in range(self._policy_iters - 1):
             density = self._policy(observations[:-1]).log_prob(actions).exp()
-            performance = torch.min(density * _tmp1, _tmp2)
+            performance = -torch.min(density * _tmp1, _tmp2).sum(dim=0).mean(dim=0)
             performance.backward()
             self._policy_optim.step()
             self._policy_optim.zero_grad()
