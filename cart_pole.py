@@ -39,10 +39,9 @@ def main():
     policy_optim = torch.optim.Adam(policy.parameters(), lr=policy_lr)
     value = Value(env.obs_size, mlp_size, num_layers).to(device)
     value_optim = torch.optim.Adam(value.parameters(), lr=value_lr)
-    # algorithm = algorithms.AdvantageActorCritic(policy=policy, policy_optim=policy_optim,
-    #                                             value=value, value_optim=value_optim, pre_value_iters=pre_value_iters,
-    #                                             value_iters=value_iters)
-    algorithm = algorithms.VanillaPolicyGradient(policy=policy, policy_optim=policy_optim)
+    algorithm = algorithms.AdvantageActorCritic(policy=policy, policy_optim=policy_optim,
+                                                value=value, value_optim=value_optim, pre_value_iters=pre_value_iters,
+                                                value_iters=value_iters)
 
     observations = misc.train(env, policy, algorithm, batch_size, epochs)
 
