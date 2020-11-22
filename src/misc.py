@@ -11,7 +11,7 @@ def mlp(in_size, out_size, mlp_size, num_layers):
     return torch.nn.Sequential(*model)
 
 
-def train(env, policy, optim, algorithm, epochs, batch_size):
+def train(env, policy, algorithm, batch_size, epochs):
     observations, actions, rewards = env(policy, batch_dims=(batch_size,))
     # observations has shape (time=300, batch_size, obs_size=4)
     # actions has shape (time=299, batch_size, num-actions=2)
@@ -27,16 +27,13 @@ def train(env, policy, optim, algorithm, epochs, batch_size):
     #   reward_n-1
     #   observation_n
 
+    rewards = rewards.to(observations.dtype)
     algorithm.before_train(observations, actions, rewards)
 
     for epoch in range(epochs):
         observations, actions, rewards = env(policy, batch_dims=(batch_size,))
         rewards = rewards.to(observations.dtype)
-        performance = algorithm(observations, actions, rewards)
-        performance.backward()
-        optim.step()
-        optim.zero_grad()
-
+        algorithm.step(observations, actions, rewards)
         print(f"Epoch: {epoch} Reward: {rewards.sum(dim=0).mean(dim=0)}")
 
     return observations  # return last observation batch
